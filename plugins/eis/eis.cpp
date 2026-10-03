@@ -529,6 +529,19 @@ void eis_session_t::activate(uint32_t barrier_id, double cx, double cy)
     }
 
     this->session_state = session_state_t::ACTIVATED;
+
+    /*
+     * While the capture is active the pointer is driving the *remote* machine, so
+     * the local cursor must not be drawn: leaving it visible leaves a stray cursor
+     * pinned against the zone boundary where the pointer was last seen. Pair with
+     * deactivate() below; hide_cursor() is refcounted, so this must be balanced.
+     */
+    if (!this->cursor_hidden)
+    {
+        wf::get_core().hide_cursor();
+        this->cursor_hidden = true;
+    }
+
     LOGI("eis: activated by barrier ", barrier_id, " activation_id=",
         this->activation_id, " cursor=", cx, ",", cy);
     this->emit_activated(barrier_id, cx, cy);
@@ -552,6 +565,12 @@ void eis_session_t::deactivate(bool emit_signal)
         {
             eis_device_stop_emulating(dev);
         }
+    }
+
+    if (this->cursor_hidden)
+    {
+        wf::get_core().unhide_cursor();
+        this->cursor_hidden = false;
     }
 
     LOGI("eis: deactivated (activation_id=", this->activation_id, ")");
@@ -1032,7 +1051,30 @@ void eis_session_t::handle_eis_event(struct eis_event *event)
       {
         auto *dev = eis_event_get_device(event);
         LOGI("eis: client closed a device");
-        this->destroy_device(dev);
+
+        /*
+         * libei has already removed and destroyed this device by the time it
+         * reports DEVICE_CLOSED, exactly as for CLIENT_DISCONNECT below. Calling
+         * eis_device_remove() on it touches freed memory, and leaving our own
+         * pointer set means the next ensure_eis_devices() frees it a second time.
+         * So just drop the pointer; deliberately do not unref, since releasing a
+         * reference the library has already torn down is the same hazard.
+         */
+        if (dev == this->pointer)
+        {
+            this->pointer = nullptr;
+        }
+
+        if (dev == this->absolute)
+        {
+            this->absolute = nullptr;
+        }
+
+        if (dev == this->keyboard)
+        {
+            this->keyboard = nullptr;
+        }
+
         break;
       }
 
@@ -1520,6 +1562,33 @@ int handle_create_session(sd_bus_message *msg, void *userdata, sd_bus_error *ret
     return sd_bus_reply_method_return(msg, "o", session->path().c_str());
 }
 
+namespace
+{
+/**
+ * Send an empty method reply and tell sd-bus we did.
+ *
+ * sd_bus_reply_method_return(msg, "") looks like the obvious way to answer a
+ * void method, but it returns the number of bytes appended -- zero for an empty
+ * reply -- and a handler that returns 0 leaves sd-bus to synthesise the reply,
+ * which this sd-bus build does not do. The caller then sees no reply at all
+ * ("Message recipient disconnected ... NoReply"). So send the reply directly and
+ * return a positive value.
+ */
+int reply_empty(sd_bus_message *msg)
+{
+    sd_bus_message *reply = nullptr;
+    int r = sd_bus_message_new_method_return(msg, &reply);
+    if (r < 0)
+    {
+        return r;
+    }
+
+    r = sd_bus_send(nullptr, reply, nullptr);
+    sd_bus_message_unref(reply);
+    return r < 0 ? r : 1;
+}
+} // namespace
+
 /** Shared permission gate for every session-scoped method. */
 #define EIS_REQUIRE_SESSION(msg, ret_error) \
     auto *session = static_cast<eis_session_t*>(userdata); \
@@ -1616,7 +1685,7 @@ int handle_clear_barriers(sd_bus_message *msg, void *userdata, sd_bus_error *ret
 
     // Send the empty reply explicitly: returning 0 would leave sd-bus to
     // synthesise it, which this sd-bus build does not do.
-    return sd_bus_reply_method_return(msg, "");
+    return reply_empty(msg);
 }
 
 int handle_enable(sd_bus_message *msg, void *userdata, sd_bus_error *ret_error)
@@ -1627,7 +1696,7 @@ int handle_enable(sd_bus_message *msg, void *userdata, sd_bus_error *ret_error)
 
     // Send the empty reply explicitly: returning 0 would leave sd-bus to
     // synthesise it, which this sd-bus build does not do.
-    return sd_bus_reply_method_return(msg, "");
+    return reply_empty(msg);
 }
 
 int handle_disable(sd_bus_message *msg, void *userdata, sd_bus_error *ret_error)
@@ -1638,7 +1707,7 @@ int handle_disable(sd_bus_message *msg, void *userdata, sd_bus_error *ret_error)
 
     // Send the empty reply explicitly: returning 0 would leave sd-bus to
     // synthesise it, which this sd-bus build does not do.
-    return sd_bus_reply_method_return(msg, "");
+    return reply_empty(msg);
 }
 
 int handle_release(sd_bus_message *msg, void *userdata, sd_bus_error *ret_error)
@@ -1667,7 +1736,7 @@ int handle_release(sd_bus_message *msg, void *userdata, sd_bus_error *ret_error)
     session->release(activation_id);
 
     // Send the empty reply explicitly; returning 0 does not work here.
-    return sd_bus_reply_method_return(msg, "");
+    return reply_empty(msg);
 }
 
 int handle_connect_to_eis(sd_bus_message *msg, void *userdata, sd_bus_error *ret_error)
@@ -1711,7 +1780,7 @@ int handle_session_close(sd_bus_message *msg, void *userdata, sd_bus_error *ret_
     session->close();
     session->server()->session_closed(session->shared_from_this());
 
-    return sd_bus_reply_method_return(msg, "");
+    return reply_empty(msg);
 }
 } // namespace
 

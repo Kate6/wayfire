@@ -280,6 +280,9 @@ class eis_session_t : public std::enable_shared_from_this<eis_session_t>
     double last_y = 0.0;
     bool have_last = false;
 
+    /** True while we have called hide_cursor() and owe an unhide_cursor(). */
+    bool cursor_hidden = false;
+
     /** Guards against re-entering the tap from our own cursor warp. */
     bool warping = false;
 
