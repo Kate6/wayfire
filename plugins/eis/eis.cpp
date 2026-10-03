@@ -292,7 +292,10 @@ void eis_session_t::refresh_zones()
     for (auto *out : wf::get_core().output_layout->get_outputs())
     {
         auto g = out->get_layout_geometry();
-        fresh.push_back(zone_t{g.x, g.y, g.width, g.height});
+        // Layout geometry is integral, but the type is floating point, so narrow explicitly
+        // rather than relying on an aggregate initialisation conversion.
+        fresh.push_back(zone_t{static_cast<int32_t>(g.x), static_cast<int32_t>(g.y),
+            static_cast<int32_t>(g.width), static_cast<int32_t>(g.height)});
     }
 
     if (fresh == this->zone_list)
