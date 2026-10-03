@@ -27,6 +27,43 @@ It aims to create a customizable, extendable and lightweight environment without
 [wlroots]: https://github.com/swaywm/wlroots
 [Compiz]: https://launchpad.net/compiz
 
+## `eis` plugin (input capture)
+
+> **Note:** this section describes in-progress work on a local branch
+> (`input-capture`), not a released Wayfire feature.
+
+`plugins/eis/` implements the compositor half of
+`org.freedesktop.impl.portal.InputCapture`, which lets a portal hand the
+compositor's keyboard and pointer to a remote machine over the network — the
+mechanism Deskflow uses for its KVM portal.
+
+Wayfire acts as the [EIS] server. It owns the EI devices and region geometry,
+gives each capture session an `eis` connection over a file descriptor, and
+translates pointer barriers between portal coordinates and output-space
+coordinates. The public portal API is *not* implemented here; the plugin
+exposes a private bus interface, `org.wayfire.Eis`, which the InputCapture
+backend in xdg-desktop-portal-wlr sits on top of.
+
+Notable behaviour:
+
+- one `struct eis *` per capture session
+- the session's zone is the union of the enabled output work areas, and
+  `ZonesChanged` is emitted whenever it moves
+- barrier IDs are compositor-owned; the backend maps them in both directions
+- the cursor is hidden while capture is active, since the pointer is driving
+  the remote machine, and held keys/buttons are released on deactivation so
+  modifiers do not stick
+
+Exercised end to end against a real Deskflow client: session creation and
+`Start`, the EI handshake yielding pointer and keyboard devices, barriers for
+every outer edge, barrier crossing handing capture to the remote machine, and
+clean teardown on `Stop`.
+
+Needs `libei` (pkg-config `libeis-1.0`, which provides the server half) and
+`libsystemd`.
+
+[EIS]: https://gitlab.freedesktop.org/libei/libei
+
 ## Dependencies
 
 ### Wayfire Dependencies
