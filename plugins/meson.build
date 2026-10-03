@@ -53,6 +53,7 @@ wobbly_inc = include_directories('wobbly/')
 subdir('common')
 
 plugins = [
+  'eis',
   'ipc',
   'protocols',
   'vswitch',

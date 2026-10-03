@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<wayfire>
+	<plugin name="eis">
+		<_short>Emulated Input Server</_short>
+		<_long>Runs a compositor-side emulated-input (EIS) server and exports the private org.wayfire.Eis D-Bus interface used by xdg-desktop-portal-wlr to implement the InputCapture portal.</_long>
+		<category>Utility</category>
+
+		<option name="use_socket_backend" type="bool">
+			<_short>Use the EIS socket backend</_short>
+			<_long>Expose the EIS server on a unix socket at $XDG_RUNTIME_DIR/wayfire-eis so that ei-debug-events can attach. This backend is unauthenticated and intended for debugging only.</_long>
+			<default>false</default>
+		</option>
+	</plugin>
+</wayfire>
