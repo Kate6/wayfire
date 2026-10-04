@@ -440,7 +440,32 @@ wlr_surface*wayfire_xdg_popup::get_keyboard_focus_surface()
 bool wayfire_xdg_popup::parent_allows_keyboard_focus() const
 {
     auto parent = popup_parent.lock();
-    return parent && (parent->get_keyboard_focus_surface() != nullptr);
+    if (!parent)
+    {
+        return false;
+    }
+
+    if (parent->get_keyboard_focus_surface())
+    {
+        return true;
+    }
+
+    // A popup whose parent is a layer-shell surface - a panel, a dock, a
+    // notification - must still be able to take keyboard focus.
+    //
+    // Clients set a panel's keyboard interactivity to none deliberately, since
+    // a panel should not swallow keystrokes. lxqt-panel does exactly that, and
+    // explicitly expects the compositor to focus its child popups even so: it
+    // matches XDG_CURRENT_DESKTOP against kde/kwin/labwc/wayfire/hyprland and
+    // picks interactivity none only for those, i.e. it relies on the compositor
+    // rather than the panel holding focus.
+    //
+    // Without this, panel menus deadlock. Neither side can be focused - the
+    // popup refuses because its parent has no focus surface, and the parent
+    // refuses because the client asked for interactivity none - so clicking
+    // into a panel menu does nothing and typing goes to the previously focused
+    // window.
+    return parent->role != wf::VIEW_ROLE_TOPLEVEL;
 }
 
 /**
