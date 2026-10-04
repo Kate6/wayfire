@@ -39,6 +39,12 @@ class focus_follows_mouse_plugin_t : public plugin_interface_t
     // Whether focus may cross to a view on a different output.
     option_wrapper_t<bool> cross_output{"focus-follows-mouse/cross_output"};
 
+    // Raise the newly focused view above the others. Off by default: raising
+    // every window the pointer merely passes over is the classic way
+    // focus-follows-mouse becomes infuriating, since the window you glanced at
+    // ends up covering the one you were working in.
+    option_wrapper_t<bool> raise{"focus-follows-mouse/raise"};
+
     /** True while any pointer button is held. Suppresses focus during drags. */
     bool button_held = false;
 
@@ -140,12 +146,37 @@ class focus_follows_mouse_plugin_t : public plugin_interface_t
         }
 
         auto wm = wf::get_core().default_wm.get();
-        if (!wm)
+        auto seat_ptr = wf::get_core().seat.get();
+        if (!wm || !seat_ptr)
         {
             return;
         }
 
-        wm->focus_request(view);
+        if (this->raise.value())
+        {
+            // Goes through the signal, so other plugins can veto, and the
+            // window is brought to the front.
+            wm->focus_request(view);
+            return;
+        }
+
+        // Default path: focus without raising.
+        //
+        // focus_request() always calls view_bring_to_front(), which is not
+        // exposed in the public window-manager header, so there is no way to
+        // undo it afterwards. seat->focus_view() skips the raise entirely.
+        //
+        // The trade-off is that focus_view() does not emit
+        // view_focus_request_signal, so a plugin that wants to veto focus
+        // changes (a kiosk plugin, a modal-dialog handler) will not see ours.
+        // Focus still switches outputs first, matching what focus_raise_view()
+        // does, so per-output plugin state stays correct.
+        if (auto view_out = view->get_output())
+        {
+            seat_ptr->focus_output(view_out);
+        }
+
+        seat_ptr->focus_view(view);
     }
 
     wf::signal::connection_t<wf::input_event_signal<wlr_pointer_motion_event>>

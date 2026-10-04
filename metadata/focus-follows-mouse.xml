@@ -17,5 +17,10 @@
 			<_long>Whether focus may move to a view on a different output when the pointer enters it. When disabled, only views on the currently focused output are focused.</_long>
 			<default>true</default>
 		</option>
+		<option name="raise" type="bool">
+			<_short>Raise newly focused window</_short>
+			<_long>Bring the newly focused window to the front. When disabled (the default) focus moves without raising, so windows merely passed over by the pointer do not cover the one you are working in. When enabled, the request goes through the normal focus machinery, which means other plugins can veto it.</_long>
+			<default>false</default>
+		</option>
 	</plugin>
 </wayfire>
