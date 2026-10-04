@@ -54,6 +54,7 @@ subdir('common')
 
 plugins = [
   'eis',
+  'focus-follows-mouse',
   'ipc',
   'protocols',
   'vswitch',
