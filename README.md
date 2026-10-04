@@ -27,10 +27,13 @@ It aims to create a customizable, extendable and lightweight environment without
 [wlroots]: https://github.com/swaywm/wlroots
 [Compiz]: https://launchpad.net/compiz
 
-## `eis` plugin (input capture)
+## Local additions
 
-> **Note:** this section describes in-progress work on a local branch
-> (`input-capture`), not a released Wayfire feature.
+> **Note:** this section documents work on local branches, not released
+> Wayfire features. Everything here lives in this tree; the four items are
+> independent of one another and each can be taken on its own.
+
+### `eis` plugin (input capture)
 
 `plugins/eis/` implements the compositor half of
 `org.freedesktop.impl.portal.InputCapture`, which lets a portal hand the
@@ -63,6 +66,79 @@ Needs `libei` (pkg-config `libeis-1.0`, which provides the server half) and
 `libsystemd`.
 
 [EIS]: https://gitlab.freedesktop.org/libei/libei
+
+### `focus-follows-mouse` plugin
+
+Moves keyboard focus to whichever window the pointer enters. Wayfire has no
+built-in option for this — the only focus-related keys in the metadata are
+`core/focus_buttons`, `core/focus_button_with_modifiers` and `simple-tile`'s
+`key_focus_*`, none of which track the pointer — so it is a plugin.
+
+Two behaviours are suppressed on purpose:
+
+- **While any pointer button is held, focus is frozen.** Every pointer-initiated
+  grab (window move, resize, drag-and-drop) holds a button for its duration, so
+  this one flag prevents the failure mode where dragging a window across the
+  screen keeps re-focusing everything it passes over and the drag fights the
+  focus change.
+- **Popups and layer surfaces are skipped** even when they report themselves
+  focusable. Focusing one pulls the keyboard to the menu instead of the window
+  beneath it.
+
+Focus does **not** raise by default. `window_manager_t::focus_request()` always
+calls `view_bring_to_front()`, which is not exposed in the public header and so
+cannot be undone afterwards; the default path uses `seat->focus_view()` instead.
+The trade-off is that `focus_view()` does not emit `view_focus_request_signal`,
+so a plugin that vetoes focus changes will not see requests from this one. Set
+`raise = true` for the old behaviour.
+
+Options, under `[focus-follows-mouse]`:
+
+| Option | Default | Meaning |
+|---|---|---|
+| `delay` | `0` | milliseconds to rest before focus moves; `0` is immediate |
+| `cross_output` | `true` | whether focus may follow the pointer to another output |
+| `raise` | `false` | bring the newly focused window to the front |
+
+### Smart window placement
+
+Adds `mode = smart` to the `place` plugin, after Compiz's `placeSmart()`
+(`plugins/place.c`). Where cascade walks fixed offsets until something fits,
+smart scores each candidate position by how much it would overlap existing
+windows and takes the least-bad one, stepping past each obstacle in turn.
+
+Overlapping a window that is *above* the new one counts sixteen times as much
+as an ordinary window, and a window *below* counts nothing — so the result
+slides underneath things rather than over them. Wayfire does not expose
+per-view above/below state, so the scene layer is used as the closest
+equivalent: `TOP`-layer (always-on-top) views weigh 16, `WORKSPACE` views weigh
+1, `BOTTOM`-layer views weigh 0.
+
+The original credits SmartPlacement by Cristian Tibirna, adapted through kwm,
+kwin, fvwm and xfce before reaching Compiz. Windows at least as large as the
+workarea fall back to centring rather than running the scan, which would
+otherwise iterate pointlessly.
+
+### Popups parented to a layer-shell surface can take keyboard focus
+
+Without this, panel menus cannot be typed into: clicking into one does nothing
+and keystrokes go to whichever window had been focused before. The LXQt panel
+and the wf-shell panel both exhibited it.
+
+The cause was a mutual deadlock. `wayfire_xdg_popup::get_keyboard_focus_surface()`
+returns `nullptr` while `parent_allows_keyboard_focus()` is false, and that is
+false while the parent has no focus surface of its own. A layer-shell panel has
+none, because clients set its keyboard interactivity to `none` deliberately — a
+panel should not swallow keystrokes. Neither side could therefore be focused.
+
+Clients rely on the compositor here rather than on the panel holding focus.
+lxqt-panel matches `XDG_CURRENT_DESKTOP` against `kde|kwin|labwc|wayfire|hyprland`
+and selects `KeyboardInteractivityNone` only for those compositors, explicitly
+expecting the compositor to focus the child popup instead.
+
+The fix treats a non-toplevel parent — i.e. a layer-shell surface — as
+permitting focus. Toplevels always take focus on click, so they are not the case
+that can deadlock.
 
 ## Dependencies
 
