@@ -17,6 +17,11 @@
 				<_name>Cascade</_name>
 			</desc>
 			<desc>
+				<value>smart</value>
+				<_name>Smart</_name>
+				<_tooltip>Places the window where it overlaps other windows least, preferring to sit under windows that are already behind. After Compiz's placeSmart.</_tooltip>
+			</desc>
+			<desc>
 				<value>maximize</value>
 				<_name>Maximize</_name>
 			</desc>
