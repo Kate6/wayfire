@@ -8,6 +8,8 @@
 
 #include <wayfire/util/log.hpp>
 
+#include <cmath>
+
 namespace wf
 {
 /**
@@ -61,7 +63,20 @@ class focus_follows_mouse_plugin_t : public plugin_interface_t
             return;
         }
 
-        auto view = wf::get_core().get_cursor_focus_view();
+        // Hit-test the scene directly rather than using
+        // get_cursor_focus_view(). This handler runs on the *pre* input signal,
+        // which Wayfire emits before update_cursor_focus() has been called for
+        // this event (see pointer.cpp: emit_device_event_signal() precedes
+        // update_cursor_focus()). So the cursor focus still names the view
+        // under the pointer's *previous* position, and focus would trail the
+        // pointer. get_view_at() hit-tests the scene now.
+        auto pos = wf::get_core().get_cursor_position();
+        if (std::isnan(pos.x) || std::isnan(pos.y))
+        {
+            return;
+        }
+
+        auto view = wf::get_core().get_view_at(pos);
         if (!view)
         {
             // Pointer is over the desktop background. Leave focus where it is;
@@ -125,10 +140,12 @@ class focus_follows_mouse_plugin_t : public plugin_interface_t
         }
 
         auto wm = wf::get_core().default_wm.get();
-        if (wm)
+        if (!wm)
         {
-            wm->focus_request(view);
+            return;
         }
+
+        wm->focus_request(view);
     }
 
     wf::signal::connection_t<wf::input_event_signal<wlr_pointer_motion_event>>
