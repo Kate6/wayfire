@@ -1,13 +1,21 @@
 <?xml version="1.0"?>
-<option name="delay" type="int">
-	<_short>Focus delay</_short>
-	<_long>Milliseconds the pointer must rest on a view before keyboard focus moves to it. Set to 0 to focus immediately. A small delay avoids focusing every window the pointer sweeps across.</_long>
-	<default>0</default>
-	<min>0</min>
-	<max>5000</max>
-</option>
-<option name="cross_output" type="bool">
-	<_short>Follow focus across outputs</_short>
-	<_long>Whether focus may move to a view on a different output when the pointer enters it. When disabled, only views on the currently focused output are focused.</_long>
-	<default>true</default>
-</option>
+<wayfire>
+	<plugin name="focus-follows-mouse">
+		<_short>Focus follows mouse</_short>
+		<_long>Moves keyboard focus to whichever window the pointer enters.</_long>
+		<category>Window Management</category>
+
+		<option name="delay" type="int">
+			<_short>Focus delay</_short>
+			<_long>Milliseconds the pointer must rest on a view before keyboard focus moves to it. Set to 0 to focus immediately. A small delay avoids focusing every window the pointer sweeps across.</_long>
+			<default>0</default>
+			<min>0</min>
+			<max>5000</max>
+		</option>
+		<option name="cross_output" type="bool">
+			<_short>Follow focus across outputs</_short>
+			<_long>Whether focus may move to a view on a different output when the pointer enters it. When disabled, only views on the currently focused output are focused.</_long>
+			<default>true</default>
+		</option>
+	</plugin>
+</wayfire>

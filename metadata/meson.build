@@ -10,6 +10,11 @@ install_data('decoration.xml', install_dir: conf_data.get('PLUGIN_XML_DIR'))
 install_data('eis.xml', install_dir: conf_data.get('PLUGIN_XML_DIR'))
 install_data('expo.xml', install_dir: conf_data.get('PLUGIN_XML_DIR'))
 install_data('focus-follows-mouse.xml', install_dir: conf_data.get('PLUGIN_XML_DIR'))
+# wcm looks for plugin icons as plugin-<name>.svg in wayfire's icondir
+install_data('../plugins/focus-follows-mouse/plugin-focus-follows-mouse.svg',
+    install_dir: get_option('prefix') / get_option('datadir') / 'wayfire' / 'icons')
+install_data('../plugins/eis/plugin-eis.svg',
+    install_dir: get_option('prefix') / get_option('datadir') / 'wayfire' / 'icons')
 install_data('ext-toplevel.xml', install_dir: conf_data.get('PLUGIN_XML_DIR'))
 install_data('ext-workspace.xml', install_dir: conf_data.get('PLUGIN_XML_DIR'))
 install_data('extra-gestures.xml', install_dir: conf_data.get('PLUGIN_XML_DIR'))
