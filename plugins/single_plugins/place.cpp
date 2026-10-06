@@ -7,6 +7,12 @@
 #include <wayfire/view-helpers.hpp>
 #include <wayfire/scene.hpp>
 #include <wayfire/core.hpp>
+// wlr_xwayland_surface has a field literally named `class`, which is a C++
+// keyword. Wayfire's wlroots-full.hpp works around this with a temporary
+// macro; do the same for this single header.
+#define class class_t
+#include <wlr/xwayland.h>
+#undef class
 #include <wayfire/workarea.hpp>
 #include <wayfire/window-manager.hpp>
 #include <wayfire/signal-definitions.hpp>
@@ -81,7 +87,7 @@ class wayfire_place_window : public wf::plugin_interface_t
             cascade(view, workarea);
         } else if (mode == "smart")
         {
-            smart(view, workarea);
+            smart_or_center(view, workarea);
         } else if (mode == "maximize")
         {
             maximize(view, workarea);
@@ -188,6 +194,114 @@ class wayfire_place_window : public wf::plugin_interface_t
     void maximize(wayfire_toplevel_view & view, wf::geometry_t workarea)
     {
         wf::get_core().default_wm->tile_request(view, wf::TILED_EDGES_ALL);
+    }
+
+    /**
+     * The ICCCM window type of an Xwayland view, if it is one. Native Wayland
+     * (xdg-shell) has no window-type field, so native views always fall
+     * through to the caller - there is no equivalent check for them.
+     */
+    wlr_xwayland_surface *get_xwayland_surface(wayfire_toplevel_view view)
+    {
+        wlr_surface *wsurf = view->get_wlr_surface();
+        if (!wsurf)
+        {
+            return nullptr;
+        }
+
+        return wlr_xwayland_surface_try_from_wlr_surface(wsurf);
+    }
+
+    bool has_window_type(wayfire_toplevel_view view,
+        enum wlr_xwayland_net_wm_window_type type)
+    {
+        auto xwsurf = get_xwayland_surface(view);
+        if (!xwsurf)
+        {
+            return false;
+        }
+
+        return wlr_xwayland_surface_has_window_type(xwsurf, type);
+    }
+
+    /**
+     * Compiz parity for "smart" placement, after placeGetStrategyForWindow()
+     * in Compiz's plugins/place.c: smart scoring applies only to normal,
+     * movable windows. Everything else is either left alone or centered.
+     *
+     * Concretely: unmovable windows are not touched (Compiz's NoPlacement);
+     * unparented Xwayland dialogs, modals and splash screens are centered on
+     * screen (Compiz's PlaceCenteredOnScreen); Xwayland utility, toolbar and
+     * menu windows are not touched (Compiz's NoPlacement for those types).
+     *
+     * Parented transients never reach us: should_place() already skips views
+     * with a parent, which is the closest equivalent of PlaceOverParent - the
+     * client positions them itself.
+     *
+     * Native Wayland views cannot be classified: xdg-shell carries no window
+     * type, so an unparented native dialog is indistinguishable from a normal
+     * window and is still smart-placed. This is a protocol limitation, not a
+     * gap in the check.
+     */
+    void smart_or_center(wayfire_toplevel_view view, wf::geometry_t workarea)
+    {
+        // Only genuine toplevels. Unmanaged views (Xwayland override-redirect)
+        // and desktop-environment views position themselves.
+        if (view->role != wf::VIEW_ROLE_TOPLEVEL)
+        {
+            return;
+        }
+
+        // Unmovable windows are left alone.
+        if (!(view->get_allowed_actions() & wf::VIEW_ALLOW_MOVE))
+        {
+            return;
+        }
+
+        if (is_xwayland_dialog_or_splash(view))
+        {
+            center(view, workarea);
+            return;
+        }
+
+        if (is_xwayland_utility(view))
+        {
+            return;
+        }
+
+        smart(view, workarea);
+    }
+
+    bool is_xwayland_dialog_or_splash(wayfire_toplevel_view view)
+    {
+        auto xwsurf = get_xwayland_surface(view);
+        if (!xwsurf)
+        {
+            return false;
+        }
+
+        if (xwsurf->modal)
+        {
+            return true;
+        }
+
+        return has_window_type(view, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_DIALOG) ||
+            has_window_type(view, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_SPLASH);
+    }
+
+    bool is_xwayland_utility(wayfire_toplevel_view view)
+    {
+        // Dock, desktop, menu and fullscreen types never reach us as managed
+        // toplevels; the rest of Compiz's NoPlacement list is covered here.
+        return has_window_type(view, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_UTILITY) ||
+            has_window_type(view, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_TOOLBAR) ||
+            has_window_type(view, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_MENU) ||
+            has_window_type(view, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_DROPDOWN_MENU) ||
+            has_window_type(view, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_POPUP_MENU) ||
+            has_window_type(view, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_TOOLTIP) ||
+            has_window_type(view, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_NOTIFICATION) ||
+            has_window_type(view, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_COMBO) ||
+            has_window_type(view, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_DND);
     }
 
     /**

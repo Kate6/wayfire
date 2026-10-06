@@ -19,7 +19,7 @@
 			<desc>
 				<value>smart</value>
 				<_name>Smart</_name>
-				<_tooltip>Places the window where it overlaps other windows least, preferring to sit under windows that are already behind. After Compiz's placeSmart.</_tooltip>
+				<_tooltip>Places the window where it overlaps other windows least, preferring to sit under windows that are already behind. After Compiz's placeSmart. Unmovable windows are left alone; unparented Xwayland dialogs and splash screens are centered; utility windows are left alone. Native Wayland dialogs cannot be detected (xdg-shell has no window type) and are still smart-placed.</_tooltip>
 			</desc>
 			<desc>
 				<value>maximize</value>
